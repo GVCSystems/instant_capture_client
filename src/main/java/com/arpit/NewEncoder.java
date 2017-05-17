@@ -8,13 +8,16 @@ import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import com.fazecast.jSerialComm.SerialPort;
+import com.fazecast.jSerialComm.SerialPortDataListener;
+import com.fazecast.jSerialComm.SerialPortEvent;
 import com.github.sarxos.webcam.Webcam;
 import com.github.sarxos.webcam.WebcamResolution;
-import com.sun.org.apache.bcel.internal.generic.NEW;
 import com.xuggle.mediatool.IMediaWriter;
 import com.xuggle.mediatool.ToolFactory;
 import com.xuggle.xuggler.ICodec;
@@ -63,6 +66,10 @@ public class NewEncoder extends JFrame {
                 capture();
             }
         }*/
+
+        SerialPort comPort = SerialPort.getCommPorts()[0];
+        comPort.openPort();
+
         WebcamPanel panel = new WebcamPanel(webcam, size, false);
         panel.cam_number = cam_number;
         panel.setFillArea(true);
@@ -78,12 +85,10 @@ public class NewEncoder extends JFrame {
 
         thread = new Thread(buffer_collecter);
         thread.start();
-        addWindowListener(new WindowAdapter()
-        {
+        addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(WindowEvent e)
-            {
-                loop=false;
+            public void windowClosing(WindowEvent e) {
+                loop = false;
                 e.getWindow().dispose();
                 System.exit(0);
             }
@@ -98,6 +103,47 @@ public class NewEncoder extends JFrame {
                 clicks++;
             }
         });
+
+
+        // *050,62,62#
+        InputStream in = comPort.getInputStream();
+        try
+        {
+            while(true)
+            {
+                while(comPort.bytesAvailable() == 0)
+                    Thread.sleep(200);
+                String str="";
+                int j=0;
+                for (j=0;j<11;j++)
+                {
+                    str += ((char) in.read());
+                }
+
+                System.out.println(str);
+                StringBuilder builder = new StringBuilder(str);
+                if( !(builder.substring(0,1).equals("*") &&
+                        builder.substring(builder.length()-1,builder.length()).equals("#")))
+                {
+                    continue;
+                }
+
+                String speed = builder.subSequence(1,builder.indexOf(",")).toString();
+                builder.delete(0, builder.indexOf(",")+1);
+                String lat = builder.substring(0,builder.indexOf(",")).toString();
+                builder.delete(0,builder.indexOf(",")+1);
+                String lon = builder.substring(0,builder.length()-1);
+
+                if(Float.parseFloat(speed) > 80)
+                {
+                    btSnapMe.doClick();
+                }
+            }
+
+        } catch (Exception e) { e.printStackTrace(); }
+        in.close();
+        comPort.closePort();
+
 
     }
 
